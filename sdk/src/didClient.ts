@@ -31,6 +31,15 @@ export class DIDClient {
     this.didRegistryContract = new Contract(config.contracts.didRegistry);
   }
 
+  private validateInput(condition: boolean, message: string): void {
+    if (!condition) {
+      const err = new Error(message) as StellarIdentityError;
+      err.code = 400;
+      err.type = 'ValidationError';
+      throw err;
+    }
+  }
+
   async createDID(
     keypair: Keypair,
     options: CreateDIDOptions,
@@ -38,6 +47,21 @@ export class DIDClient {
   ): Promise<string> {
     try {
       const address = keypair.publicKey();
+      this.validateInput(address.length > 0, 'Keypair public key must not be empty');
+      this.validateInput(options.verificationMethods.length <= 20, 'Too many verification methods (max 20)');
+      this.validateInput(options.services.length <= 20, 'Too many services (max 20)');
+
+      for (const vm of options.verificationMethods) {
+        this.validateInput(vm.id.length <= 256, 'Verification method ID too long (max 256 chars)');
+        this.validateInput(vm.type.length <= 64, 'Verification method type too long (max 64 chars)');
+        this.validateInput(this.isValidStellarAddress(vm.controller), 'Invalid controller address in verification method');
+      }
+
+      for (const svc of options.services) {
+        this.validateInput(svc.id.length <= 256, 'Service ID too long (max 256 chars)');
+        this.validateInput(svc.endpoint.length <= 1024, 'Service endpoint too long (max 1024 chars)');
+      }
+
       const did = this.generateDID(address);
       const account = await this.rpc.getAccount(address);
 

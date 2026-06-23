@@ -9,6 +9,8 @@ export { DIDClient } from './didClient';
 export { CredentialClient } from './credentialClient';
 export { ReputationClient } from './reputation';
 export { ZKProofsClient } from './zkProofs';
+export { CacheManager, DataType } from './cacheManager';
+export { EventSubscriber } from './eventSubscriber';
 
 export { DIDResolver } from './didResolver';
 export type {
@@ -53,6 +55,8 @@ import { DIDClient } from './didClient';
 import { CredentialClient } from './credentialClient';
 import { ReputationClient } from './reputation';
 import { ZKProofsClient } from './zkProofs';
+import { CacheManager } from './cacheManager';
+import { EventSubscriber } from './eventSubscriber';
 import { StellarIdentityConfig } from './types';
 
 export class StellarIdentitySDK {
@@ -60,12 +64,16 @@ export class StellarIdentitySDK {
   public credentials: CredentialClient;
   public reputation: ReputationClient;
   public zkProofs: ZKProofsClient;
+  public cache: CacheManager;
+  public events: EventSubscriber;
 
   constructor(config: StellarIdentityConfig) {
     this.did = new DIDClient(config);
     this.credentials = new CredentialClient(config);
     this.reputation = new ReputationClient(config);
     this.zkProofs = new ZKProofsClient(config);
+    this.cache = new CacheManager();
+    this.events = new EventSubscriber(config);
   }
 
   async initializeUserIdentity(
