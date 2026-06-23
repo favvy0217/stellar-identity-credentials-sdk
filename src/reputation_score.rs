@@ -254,6 +254,8 @@ impl ReputationScore {
         Ok(Self::load_profile(&env, &did)?.score >= threshold * SCORE_SCALE)
     }
 
+    const MAX_REASON_LENGTH: u32 = 1024;
+
     pub fn attest_trust(
         env: Env,
         truster: Address,
@@ -263,6 +265,9 @@ impl ReputationScore {
     ) -> Result<TrustAttestation, ReputationScoreError> {
         truster.require_auth();
         if weight > 1000 {
+            return Err(ReputationScoreError::InvalidScore);
+        }
+        if reason.len() > Self::MAX_REASON_LENGTH {
             return Err(ReputationScoreError::InvalidScore);
         }
 

@@ -21,6 +21,11 @@ pub struct CredentialIssuer;
 
 #[contractimpl]
 impl CredentialIssuer {
+    const MAX_CREDENTIAL_TYPE_LENGTH: u32 = 128;
+    const MAX_CREDENTIAL_DATA_LENGTH: u32 = 10240;
+    const MAX_CLAIM_KEY_LENGTH: u32 = 128;
+    const MAX_CLAIM_VALUE_LENGTH: u32 = 2048;
+
     /// Issue a new verifiable credential
     pub fn issue_credential(
         env: Env,
@@ -33,6 +38,16 @@ impl CredentialIssuer {
     ) -> Result<Bytes, CredentialIssuerError> {
         // Verify issuer authorization
         issuer.require_auth();
+
+        for ct in credential_type.iter() {
+            if ct.len() > Self::MAX_CREDENTIAL_TYPE_LENGTH {
+                return Err(CredentialIssuerError::InvalidCredential);
+            }
+        }
+
+        if credential_data.len() > Self::MAX_CREDENTIAL_DATA_LENGTH {
+            return Err(CredentialIssuerError::InvalidCredential);
+        }
 
         // Generate credential ID
         let credential_id = Self::generate_credential_id(&env, &issuer, &subject);

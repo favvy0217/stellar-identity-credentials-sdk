@@ -32,6 +32,15 @@ export class CredentialClient {
     this.didClient = new DIDClient(config);
   }
 
+  private validateInput(condition: boolean, message: string): void {
+    if (!condition) {
+      const err = new Error(message) as StellarIdentityError;
+      err.code = 400;
+      err.type = 'ValidationError';
+      throw err;
+    }
+  }
+
   async issueCredential(
     issuerKeypair: Keypair,
     options: IssueCredentialOptions,
@@ -39,6 +48,13 @@ export class CredentialClient {
   ): Promise<string> {
     try {
       const address = issuerKeypair.publicKey();
+      this.validateInput(address.length > 0, 'Keypair public key must not be empty');
+      this.validateInput(this.isValidStellarAddress(options.subject), 'Invalid subject Stellar address');
+      this.validateInput(options.credentialType.length > 0, 'At least one credential type required');
+      this.validateInput(options.credentialType.length <= 10, 'Too many credential types (max 10)');
+      this.validateInput(options.credentialData != null, 'Credential data must not be null');
+      const dataStr = JSON.stringify(options.credentialData);
+      this.validateInput(dataStr.length <= 10240, 'Credential data too large (max 10KB)');
       const account = await this.rpc.getAccount(address);
 
       const tx = new TransactionBuilder(account, {
@@ -359,6 +375,10 @@ export class CredentialClient {
     const message = JSON.stringify(data);
     return Array.from(keypair.sign(Buffer.from(message)) as Uint8Array)
       .map((b: number) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  private isValidStellarAddress(address: string): boolean {
+    try { Address.fromString(address); return true; } catch { return false; }
   }
 
   private getDefaultRpcUrl(): string {

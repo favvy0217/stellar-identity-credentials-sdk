@@ -20,6 +20,11 @@ pub struct DIDRegistry;
 
 #[contractimpl]
 impl DIDRegistry {
+    const MAX_DID_LENGTH: u32 = 256;
+    const MAX_VM_ID_LENGTH: u32 = 128;
+    const MAX_SERVICE_ID_LENGTH: u32 = 128;
+    const MAX_SERVICE_ENDPOINT_LENGTH: u32 = 512;
+
     /// Register a new DID anchored to a Stellar account.
     ///
     /// `did_id` is the full DID string as UTF-8 bytes, e.g.
@@ -36,6 +41,22 @@ impl DIDRegistry {
 
         if !Self::check_did_prefix(&env, &did_id) {
             return Err(DIDRegistryError::InvalidFormat);
+        }
+
+        if did_id.len() > Self::MAX_DID_LENGTH {
+            return Err(DIDRegistryError::InvalidFormat);
+        }
+
+        for vm in verification_methods.iter() {
+            if vm.id.len() > Self::MAX_VM_ID_LENGTH {
+                return Err(DIDRegistryError::InvalidFormat);
+            }
+        }
+
+        for svc in services.iter() {
+            if svc.id.len() > Self::MAX_SERVICE_ID_LENGTH || svc.endpoint.len() > Self::MAX_SERVICE_ENDPOINT_LENGTH {
+                return Err(DIDRegistryError::InvalidFormat);
+            }
         }
 
         if env.storage().persistent().has(&did_id) {

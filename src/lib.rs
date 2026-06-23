@@ -5,6 +5,7 @@ pub mod zk_attestation;
 pub mod compliance_filter;
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, Symbol, Vec};
+use core::fmt::Write;
 
 pub use did_registry::DIDRegistry;
 pub use credential_issuer::CredentialIssuer;
@@ -78,23 +79,23 @@ impl StellarIdentity {
         env.storage().instance().set(&Symbol::new(&env, "compliance_filter"), &compliance_filter_address);
     }
 
-    pub fn get_did_registry_address(env: Env) -> Address {
-        env.storage().instance().get(&Symbol::new(&env, "did_registry")).unwrap()
+    pub fn get_did_registry_address(env: Env) -> Option<Address> {
+        env.storage().instance().get(&Symbol::new(&env, "did_registry"))
     }
 
-    pub fn get_credential_issuer_address(env: Env) -> Address {
-        env.storage().instance().get(&Symbol::new(&env, "credential_issuer")).unwrap()
+    pub fn get_credential_issuer_address(env: Env) -> Option<Address> {
+        env.storage().instance().get(&Symbol::new(&env, "credential_issuer"))
     }
 
-    pub fn get_reputation_score_address(env: Env) -> Address {
-        env.storage().instance().get(&Symbol::new(&env, "reputation_score")).unwrap()
+    pub fn get_reputation_score_address(env: Env) -> Option<Address> {
+        env.storage().instance().get(&Symbol::new(&env, "reputation_score"))
     }
 
-    pub fn get_zk_attestation_address(env: Env) -> Address {
-        env.storage().instance().get(&Symbol::new(&env, "zk_attestation")).unwrap()
+    pub fn get_zk_attestation_address(env: Env) -> Option<Address> {
+        env.storage().instance().get(&Symbol::new(&env, "zk_attestation"))
     }
 
-    pub fn get_compliance_filter_address(env: Env) -> Address {
-        env.storage().instance().get(&Symbol::new(&env, "compliance_filter")).unwrap()
+    pub fn get_compliance_filter_address(env: Env) -> Option<Address> {
+        env.storage().instance().get(&Symbol::new(&env, "compliance_filter"))
     }
 }
