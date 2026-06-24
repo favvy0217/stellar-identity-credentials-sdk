@@ -9,10 +9,8 @@ pub enum ReputationScoreError {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ReputationScoreUpdated {
-    pub address: Address,
-    pub new_score: u32,
-    pub reason: Bytes,
+pub enum ReputationScoreEvent {
+    ReputationScoreUpdated(Address, u32, Bytes),
 }
 
 #[contracttype]
@@ -84,11 +82,11 @@ impl ReputationScore {
         env.storage().persistent().set(&DataKey::Score(address.clone()), &score);
         env.events().publish(
             symbol_short!("reputation_updated"),
-            ReputationScoreUpdated {
-                address: address.clone(),
-                new_score: score,
-                reason: reason.clone(),
-            },
+            ReputationScoreEvent::ReputationScoreUpdated(
+                address.clone(),
+                score,
+                reason.clone(),
+            ),
         );
 
         Ok(score)
@@ -118,11 +116,11 @@ impl ReputationScore {
         env.storage().persistent().set(&DataKey::Score(address.clone()), &score);
         env.events().publish(
             symbol_short!("reputation_updated"),
-            ReputationScoreUpdated {
-                address: address.clone(),
-                new_score: score,
-                reason: reason.clone(),
-            },
+            ReputationScoreEvent::ReputationScoreUpdated(
+                address.clone(),
+                score,
+                reason.clone(),
+            ),
         );
 
         Ok(score)
