@@ -1,8 +1,19 @@
 use soroban_sdk::{
-    contract, contracterror, contractimpl, Address, Bytes, BytesN, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, Address, Bytes, BytesN, Env, Vec,
 };
 
 use crate::{DIDDocument, Service, VerificationMethod};
+
+// ---------------------------------------------------------------------------
+// Namespaced storage keys (#58)
+// ---------------------------------------------------------------------------
+
+#[contracttype]
+#[derive(Clone)]
+enum DidKey {
+    Doc(Bytes),
+    Controller(Address),
+}
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -25,11 +36,6 @@ impl DIDRegistry {
     const MAX_SERVICE_ID_LENGTH: u32 = 128;
     const MAX_SERVICE_ENDPOINT_LENGTH: u32 = 512;
 
-    /// Register a new DID anchored to a Stellar account.
-    ///
-    /// `did_id` is the full DID string as UTF-8 bytes, e.g.
-    /// `b"did:stellar:GAA...4Z"` or `b"did:stellar:GAA...4Z:entity-123"`.
-    /// The client SDK computes this from the Stellar public key.
     pub fn create_did(
         env: Env,
         controller: Address,
@@ -42,24 +48,27 @@ impl DIDRegistry {
         if !Self::check_did_prefix(&env, &did_id) {
             return Err(DIDRegistryError::InvalidFormat);
         }
-
         if did_id.len() > Self::MAX_DID_LENGTH {
             return Err(DIDRegistryError::InvalidFormat);
         }
-
         for vm in verification_methods.iter() {
             if vm.id.len() > Self::MAX_VM_ID_LENGTH {
                 return Err(DIDRegistryError::InvalidFormat);
             }
         }
-
         for svc in services.iter() {
-            if svc.id.len() > Self::MAX_SERVICE_ID_LENGTH || svc.endpoint.len() > Self::MAX_SERVICE_ENDPOINT_LENGTH {
+            if svc.id.len() > Self::MAX_SERVICE_ID_LENGTH
+                || svc.endpoint.len() > Self::MAX_SERVICE_ENDPOINT_LENGTH
+            {
                 return Err(DIDRegistryError::InvalidFormat);
             }
         }
 
-        if env.storage().persistent().has(&did_id) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DidKey::Doc(did_id.clone()))
+        {
             return Err(DIDRegistryError::AlreadyExists);
         }
 
@@ -75,23 +84,23 @@ impl DIDRegistry {
             deactivated: false,
         };
 
-        env.storage().persistent().set(&did_id, &doc);
-        env.storage().persistent().set(&controller, &did_id);
+        env.storage()
+            .persistent()
+            .set(&DidKey::Doc(did_id.clone()), &doc);
+        env.storage()
+            .persistent()
+            .set(&DidKey::Controller(controller), &did_id);
 
         Ok(())
     }
 
-    /// Resolve a DID document by its DID string.
-    /// Returns the document even when deactivated (W3C DID Core §7.1.2).
     pub fn resolve_did(env: Env, did: Bytes) -> Result<DIDDocument, DIDRegistryError> {
         env.storage()
             .persistent()
-            .get(&did)
+            .get(&DidKey::Doc(did))
             .ok_or(DIDRegistryError::NotFound)
     }
 
-    /// Update verification methods and/or service endpoints.
-    /// Deactivated DIDs cannot be updated.
     pub fn update_did(
         env: Env,
         controller: Address,
@@ -103,13 +112,13 @@ impl DIDRegistry {
         let did: Bytes = env
             .storage()
             .persistent()
-            .get(&controller)
+            .get(&DidKey::Controller(controller.clone()))
             .ok_or(DIDRegistryError::NotFound)?;
 
         let mut doc: DIDDocument = env
             .storage()
             .persistent()
-            .get(&did)
+            .get(&DidKey::Doc(did.clone()))
             .ok_or(DIDRegistryError::NotFound)?;
 
         if doc.deactivated {
@@ -124,26 +133,26 @@ impl DIDRegistry {
         }
 
         doc.updated = env.ledger().timestamp();
-        env.storage().persistent().set(&did, &doc);
+        env.storage()
+            .persistent()
+            .set(&DidKey::Doc(did), &doc);
 
         Ok(())
     }
 
-    /// Soft-delete a DID document (tombstone).
-    /// The document is preserved on-chain with `deactivated = true` for audit.
     pub fn deactivate_did(env: Env, controller: Address) -> Result<(), DIDRegistryError> {
         controller.require_auth();
 
         let did: Bytes = env
             .storage()
             .persistent()
-            .get(&controller)
+            .get(&DidKey::Controller(controller.clone()))
             .ok_or(DIDRegistryError::NotFound)?;
 
         let mut doc: DIDDocument = env
             .storage()
             .persistent()
-            .get(&did)
+            .get(&DidKey::Doc(did.clone()))
             .ok_or(DIDRegistryError::NotFound)?;
 
         if doc.deactivated {
@@ -152,12 +161,13 @@ impl DIDRegistry {
 
         doc.deactivated = true;
         doc.updated = env.ledger().timestamp();
-        env.storage().persistent().set(&did, &doc);
+        env.storage()
+            .persistent()
+            .set(&DidKey::Doc(did), &doc);
 
         Ok(())
     }
 
-    /// Add a verification method fragment ID to the authentication array.
     pub fn add_authentication(
         env: Env,
         controller: Address,
@@ -168,13 +178,13 @@ impl DIDRegistry {
         let did: Bytes = env
             .storage()
             .persistent()
-            .get(&controller)
+            .get(&DidKey::Controller(controller.clone()))
             .ok_or(DIDRegistryError::NotFound)?;
 
         let mut doc: DIDDocument = env
             .storage()
             .persistent()
-            .get(&did)
+            .get(&DidKey::Doc(did.clone()))
             .ok_or(DIDRegistryError::NotFound)?;
 
         if doc.deactivated {
@@ -183,12 +193,13 @@ impl DIDRegistry {
 
         doc.authentication.push_back(authentication_method);
         doc.updated = env.ledger().timestamp();
-        env.storage().persistent().set(&did, &doc);
+        env.storage()
+            .persistent()
+            .set(&DidKey::Doc(did), &doc);
 
         Ok(())
     }
 
-    /// Remove a verification method fragment ID from the authentication array.
     pub fn remove_authentication(
         env: Env,
         controller: Address,
@@ -199,13 +210,13 @@ impl DIDRegistry {
         let did: Bytes = env
             .storage()
             .persistent()
-            .get(&controller)
+            .get(&DidKey::Controller(controller.clone()))
             .ok_or(DIDRegistryError::NotFound)?;
 
         let mut doc: DIDDocument = env
             .storage()
             .persistent()
-            .get(&did)
+            .get(&DidKey::Doc(did.clone()))
             .ok_or(DIDRegistryError::NotFound)?;
 
         if doc.deactivated {
@@ -228,15 +239,13 @@ impl DIDRegistry {
 
         doc.authentication = new_auth;
         doc.updated = env.ledger().timestamp();
-        env.storage().persistent().set(&did, &doc);
+        env.storage()
+            .persistent()
+            .set(&DidKey::Doc(did), &doc);
 
         Ok(())
     }
 
-    /// Verify an ed25519 signature using the DID's primary verification key.
-    ///
-    /// `env.crypto().ed25519_verify()` panics (rolls back the transaction)
-    /// if the signature is invalid — this is the correct on-chain behaviour.
     pub fn verify_signature(
         env: Env,
         did: Bytes,
@@ -246,7 +255,7 @@ impl DIDRegistry {
         let doc: DIDDocument = env
             .storage()
             .persistent()
-            .get(&did)
+            .get(&DidKey::Doc(did))
             .ok_or(DIDRegistryError::NotFound)?;
 
         if doc.deactivated {
@@ -258,12 +267,12 @@ impl DIDRegistry {
             .get(0)
             .ok_or(DIDRegistryError::NotFound)?;
 
-        env.crypto().ed25519_verify(&vm.public_key, &message, &signature);
+        env.crypto()
+            .ed25519_verify(&vm.public_key, &message, &signature);
 
         Ok(true)
     }
 
-    /// Verify an ed25519 signature using a specific verification method by index.
     pub fn verify_signature_with_method(
         env: Env,
         did: Bytes,
@@ -274,7 +283,7 @@ impl DIDRegistry {
         let doc: DIDDocument = env
             .storage()
             .persistent()
-            .get(&did)
+            .get(&DidKey::Doc(did))
             .ok_or(DIDRegistryError::NotFound)?;
 
         if doc.deactivated {
@@ -286,19 +295,22 @@ impl DIDRegistry {
             .get(method_index)
             .ok_or(DIDRegistryError::NotFound)?;
 
-        env.crypto().ed25519_verify(&vm.public_key, &message, &signature);
+        env.crypto()
+            .ed25519_verify(&vm.public_key, &message, &signature);
 
         Ok(true)
     }
 
-    /// Returns `true` if a DID document exists (active or tombstoned).
     pub fn did_exists(env: Env, did: Bytes) -> bool {
-        env.storage().persistent().has(&did)
+        env.storage()
+            .persistent()
+            .has(&DidKey::Doc(did))
     }
 
-    /// Returns the DID Bytes for a given controller address, or `None`.
     pub fn get_controller_did(env: Env, controller: Address) -> Option<Bytes> {
-        env.storage().persistent().get(&controller)
+        env.storage()
+            .persistent()
+            .get(&DidKey::Controller(controller))
     }
 
     fn check_did_prefix(env: &Env, did: &Bytes) -> bool {

@@ -3,6 +3,8 @@ use soroban_sdk::{
     Symbol, Vec,
 };
 
+use crate::{clamp_page_size, PaginatedReputationHistory};
+
 const SCORE_SCALE: u32 = 10;
 const MAX_SCORE: u32 = 1000 * SCORE_SCALE;
 const BASE_SCORE: u32 = 80 * SCORE_SCALE;
@@ -225,6 +227,41 @@ impl ReputationScore {
             }
         }
         Ok(result)
+    }
+
+    /// Paginated reputation history (#56).
+    pub fn get_reputation_history_paginated(
+        env: Env,
+        address: Address,
+        page: u32,
+        page_size: u32,
+    ) -> Result<PaginatedReputationHistory, ReputationScoreError> {
+        let history: Vec<ReputationHistoryEntry> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::History(address))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let size = clamp_page_size(page_size);
+        let total = history.len() as u32;
+        let start = page * size;
+        let mut data = Vec::new(&env);
+
+        if start < total {
+            let end = core::cmp::min(start + size, total);
+            for i in start..end {
+                if let Some(entry) = history.get(i) {
+                    data.push_back(entry);
+                }
+            }
+        }
+
+        Ok(PaginatedReputationHistory {
+            data,
+            page,
+            total,
+            has_more: (start + size) < total,
+        })
     }
 
     pub fn get_reputation_percentile(env: Env, did: Address) -> Result<u32, ReputationScoreError> {
