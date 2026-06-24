@@ -9,7 +9,8 @@
     "dev": "tsc --watch",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "example:cli-demo": "ts-node --script-mode examples/cli-demo.ts"
   },
   "keywords": [
     "stellar",
