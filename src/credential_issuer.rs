@@ -14,6 +14,9 @@ pub enum CredentialIssuerError {
     Expired = 5,
     InvalidSignature = 6,
     InvalidIssuer = 7,
+    IssuerAlreadyAuthorized = 8,
+    IssuerNotAuthorized = 9,
+    AdminNotSet = 10,
 }
 
 #[contract]
@@ -26,7 +29,144 @@ impl CredentialIssuer {
     const MAX_CLAIM_KEY_LENGTH: u32 = 128;
     const MAX_CLAIM_VALUE_LENGTH: u32 = 2048;
 
-    /// Issue a new verifiable credential
+    // ─── Admin Management ───
+
+    pub fn set_admin(env: Env, admin: Address) -> Result<(), CredentialIssuerError> {
+        admin.require_auth();
+        let key = Symbol::new(&env, "admin");
+        if env.storage().instance().has(&key) {
+            return Err(CredentialIssuerError::Unauthorized);
+        }
+        env.storage().instance().set(&key, &admin);
+        Ok(())
+    }
+
+    fn get_admin(env: &Env) -> Result<Address, CredentialIssuerError> {
+        let key = Symbol::new(env, "admin");
+        env.storage()
+            .instance()
+            .get(&key)
+            .ok_or(CredentialIssuerError::AdminNotSet)
+    }
+
+    // ─── Issuer Authorization Registry ───
+
+    pub fn authorize_issuer(
+        env: Env,
+        admin: Address,
+        issuer_address: Address,
+        credential_types: Vec<Bytes>,
+    ) -> Result<(), CredentialIssuerError> {
+        admin.require_auth();
+        let stored_admin = Self::get_admin(&env)?;
+        if admin != stored_admin {
+            return Err(CredentialIssuerError::Unauthorized);
+        }
+
+        let auth_key = Self::issuer_auth_key(&env, &issuer_address);
+        env.storage().persistent().set(&auth_key, &credential_types);
+
+        env.events().publish(
+            (Symbol::new(&env, "IssuerAuthorized"),),
+            (issuer_address, credential_types),
+        );
+
+        Ok(())
+    }
+
+    pub fn deauthorize_issuer(
+        env: Env,
+        admin: Address,
+        issuer_address: Address,
+    ) -> Result<(), CredentialIssuerError> {
+        admin.require_auth();
+        let stored_admin = Self::get_admin(&env)?;
+        if admin != stored_admin {
+            return Err(CredentialIssuerError::Unauthorized);
+        }
+
+        let auth_key = Self::issuer_auth_key(&env, &issuer_address);
+        if !env.storage().persistent().has(&auth_key) {
+            return Err(CredentialIssuerError::IssuerNotAuthorized);
+        }
+
+        env.storage().persistent().remove(&auth_key);
+
+        env.events().publish(
+            (Symbol::new(&env, "IssuerDeauthorized"),),
+            issuer_address,
+        );
+
+        Ok(())
+    }
+
+    pub fn is_authorized_issuer(
+        env: Env,
+        issuer_address: Address,
+        credential_type: Bytes,
+    ) -> bool {
+        let auth_key = Self::issuer_auth_key(&env, &issuer_address);
+        let authorized_types: Option<Vec<Bytes>> = env.storage().persistent().get(&auth_key);
+        match authorized_types {
+            Some(types) => {
+                for t in types.iter() {
+                    if t == credential_type {
+                        return true;
+                    }
+                }
+                false
+            }
+            None => false,
+        }
+    }
+
+    pub fn get_authorized_types(env: Env, issuer_address: Address) -> Vec<Bytes> {
+        let auth_key = Self::issuer_auth_key(&env, &issuer_address);
+        env.storage()
+            .persistent()
+            .get(&auth_key)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    fn issuer_auth_key(env: &Env, issuer: &Address) -> Bytes {
+        let key_str = format!("auth:{}", issuer.to_string());
+        Bytes::from_slice(env, key_str.as_bytes())
+    }
+
+    fn check_issuer_authorization(
+        env: &Env,
+        issuer: &Address,
+        credential_types: &Vec<Bytes>,
+    ) -> Result<(), CredentialIssuerError> {
+        let admin_key = Symbol::new(env, "admin");
+        if !env.storage().instance().has(&admin_key) {
+            return Ok(());
+        }
+
+        let auth_key = Self::issuer_auth_key(env, issuer);
+        let authorized_types: Vec<Bytes> = env
+            .storage()
+            .persistent()
+            .get(&auth_key)
+            .ok_or(CredentialIssuerError::IssuerNotAuthorized)?;
+
+        for ct in credential_types.iter() {
+            let mut found = false;
+            for at in authorized_types.iter() {
+                if ct == at {
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                return Err(CredentialIssuerError::IssuerNotAuthorized);
+            }
+        }
+        Ok(())
+    }
+
+    // ─── Credential Operations ───
+
     pub fn issue_credential(
         env: Env,
         issuer: Address,
@@ -36,8 +176,9 @@ impl CredentialIssuer {
         expiration_date: Option<u64>,
         proof: Bytes,
     ) -> Result<Bytes, CredentialIssuerError> {
-        // Verify issuer authorization
         issuer.require_auth();
+
+        Self::check_issuer_authorization(&env, &issuer, &credential_type)?;
 
         for ct in credential_type.iter() {
             if ct.len() > Self::MAX_CREDENTIAL_TYPE_LENGTH {

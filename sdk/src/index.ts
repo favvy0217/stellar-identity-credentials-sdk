@@ -59,6 +59,16 @@ export {
   isNetworkError,
 } from './errors';
 
+export {
+  WalletConnector,
+  FreighterConnector,
+  XBullConnector,
+  AlbedoConnector,
+  connectWallet,
+  detectInstalledWallets,
+} from './walletConnector';
+export type { WalletType, WalletInfo } from './walletConnector';
+
 export { DIDResolver } from './didResolver';
 export type {
   W3CResolutionResult,
