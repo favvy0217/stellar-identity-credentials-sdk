@@ -48,20 +48,24 @@ impl CredentialIssuer {
         env: Env,
         issuer: Address,
         subject: Address,
-        credential_type: Vec<Bytes>,
-        credential_data: Bytes,
-        expiration_date: Option<u64>,
-        proof: Bytes,
+        credential_type: Bytes,
+        claims: Map<Bytes, Bytes>,
     ) -> Result<Bytes, CredentialIssuerError> {
         issuer.require_auth();
 
-        for ct in credential_type.iter() {
-            if ct.len() > Self::MAX_CREDENTIAL_TYPE_LENGTH {
-                return Err(CredentialIssuerError::InvalidCredential);
-            }
+        if !Self::is_issuer_registered(env.clone(), issuer.clone()) {
+            return Err(CredentialIssuerError::InvalidIssuer);
         }
 
-        if credential_data.len() > Self::MAX_CREDENTIAL_DATA_LENGTH {
+        if !Self::is_valid_credential_type(&env, &credential_type) {
+            return Err(CredentialIssuerError::InvalidCredentialType);
+        }
+
+        if credential_type.len() > Self::MAX_CREDENTIAL_TYPE_LENGTH {
+            return Err(CredentialIssuerError::InvalidCredential);
+        }
+
+        if claims.is_empty() {
             return Err(CredentialIssuerError::InvalidCredential);
         }
 
@@ -214,7 +218,10 @@ impl CredentialIssuer {
 
         if let Some(expiration) = credential.expiration_date {
             if env.ledger().timestamp() > expiration {
-                return Ok(false);
+                return Ok(CredentialVerification {
+                    valid: false,
+                    reason: Some(Bytes::from_slice(&env, b"Credential expired")),
+                });
             }
         }
 
@@ -269,6 +276,11 @@ impl CredentialIssuer {
                 .persistent()
                 .set(&CredKey::Reason(credential_id), &reason_bytes);
         }
+
+        env.events().publish(
+            (Symbol::new(&env, "CredentialRevoked"),),
+            (credential_id, issuer, reason),
+        );
 
         Ok(())
     }
@@ -414,7 +426,6 @@ impl CredentialIssuer {
         if proof.is_empty() {
             return Err(CredentialIssuerError::InvalidSignature);
         }
-        Ok(())
     }
 
     fn paginate_bytes(

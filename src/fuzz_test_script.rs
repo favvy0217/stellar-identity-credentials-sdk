@@ -57,7 +57,7 @@ fn fuzz_long_did_string() {
 }
 
 #[test]
-fn fuzz_empty_credential_data() {
+fn fuzz_empty_credential_claims() {
     let env = setup_env();
     let issuer = generate_address(&env);
     let subject = generate_address(&env);
@@ -76,10 +76,12 @@ fn fuzz_empty_credential_data() {
 }
 
 #[test]
-fn fuzz_empty_credential_type() {
+fn fuzz_invalid_credential_type() {
     let env = setup_env();
     let issuer = generate_address(&env);
     let subject = generate_address(&env);
+
+    CredentialIssuer::register_issuer(env.clone(), issuer.clone()).unwrap();
 
     let result = CredentialIssuer::issue_credential(
         env.clone(),
@@ -91,7 +93,7 @@ fn fuzz_empty_credential_type() {
         Bytes::from_slice(&env, b"proof"),
     );
     assert!(result.is_err());
-    assert_eq!(result.err().unwrap(), CredentialIssuerError::InvalidCredential);
+    assert_eq!(result.err().unwrap(), CredentialIssuerError::InvalidCredentialType);
 }
 
 #[test]
@@ -134,7 +136,7 @@ fn fuzz_duplicate_circuit_registration() {
     let verifier_key = Bytes::from_slice(&env, b"key_data_16_bytes!");
     let attributes = Vec::new(&env);
 
-    assert!(ZKAttestation::register_circuit(
+    assert!(ZKAttestationContract::register_circuit(
         env.clone(),
         circuit_id.clone(),
         name.clone(),
@@ -147,7 +149,7 @@ fn fuzz_duplicate_circuit_registration() {
     )
     .is_ok());
 
-    let result = ZKAttestation::register_circuit(
+    let result = ZKAttestationContract::register_circuit(
         env.clone(),
         circuit_id,
         name,
@@ -166,7 +168,7 @@ fn fuzz_duplicate_circuit_registration() {
 fn fuzz_nullifier_reuse() {
     let env = setup_env();
     let circuit_id = Symbol::new(&env, "null_test");
-    let _ = ZKAttestation::register_circuit(
+    let _ = ZKAttestationContract::register_circuit(
         env.clone(),
         circuit_id.clone(),
         Bytes::from_slice(&env, b"Null Test"),
@@ -182,7 +184,7 @@ fn fuzz_nullifier_reuse() {
     let mut metadata = soroban_sdk::Map::new(&env);
     metadata.set(Symbol::new(&env, "context"), Bytes::from_slice(&env, b"test"));
 
-    let result1 = ZKAttestation::submit_proof(
+    let result1 = ZKAttestationContract::submit_proof(
         env.clone(),
         circuit_id.clone(),
         vec![&env, Bytes::from_slice(&env, b"input")],
@@ -194,7 +196,7 @@ fn fuzz_nullifier_reuse() {
     );
     assert!(result1.is_ok());
 
-    let result2 = ZKAttestation::submit_proof(
+    let result2 = ZKAttestationContract::submit_proof(
         env.clone(),
         circuit_id,
         vec![&env, Bytes::from_slice(&env, b"input2")],
@@ -212,7 +214,7 @@ fn fuzz_nullifier_reuse() {
 fn fuzz_empty_proof() {
     let env = setup_env();
     let circuit_id = Symbol::new(&env, "empty_proof");
-    let _ = ZKAttestation::register_circuit(
+    let _ = ZKAttestationContract::register_circuit(
         env.clone(),
         circuit_id.clone(),
         Bytes::from_slice(&env, b"Empty Proof"),
@@ -227,7 +229,7 @@ fn fuzz_empty_proof() {
     let mut metadata = soroban_sdk::Map::new(&env);
     metadata.set(Symbol::new(&env, "context"), Bytes::from_slice(&env, b"test"));
 
-    let result = ZKAttestation::submit_proof(
+    let result = ZKAttestationContract::submit_proof(
         env.clone(),
         circuit_id,
         vec![&env, Bytes::from_slice(&env, b"input")],
@@ -283,7 +285,7 @@ fn fuzz_invalid_did_format() {
 }
 
 #[test]
-fn fuzz_long_credential_type() {
+fn fuzz_unregistered_issuer() {
     let env = setup_env();
     let issuer = generate_address(&env);
     let subject = generate_address(&env);

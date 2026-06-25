@@ -1,6 +1,5 @@
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, Bytes, BytesN, Env, Map, Symbol,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, Env, Map, Symbol, Vec,
 };
 
 use crate::{clamp_page_size, PaginatedCircuits};
@@ -100,7 +99,7 @@ pub struct NullifierRecord {
 }
 
 #[contract]
-pub struct ZKAttestation;
+pub struct ZKAttestationContract;
 
 #[contractimpl]
 impl ZKAttestation {

@@ -1,3 +1,5 @@
+extern crate alloc;
+
 pub mod did_registry;
 pub mod credential_issuer;
 pub mod credential_schema;
