@@ -10,7 +10,7 @@
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "prepare": "npm run build",
-    "example:age-check": "ts-node examples/privacy-preserving-age-check.ts"
+    "example:cli-demo": "ts-node --script-mode examples/cli-demo.ts"
   },
   "keywords": [
     "stellar",
